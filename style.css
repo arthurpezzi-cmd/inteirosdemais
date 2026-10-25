@@ -1,0 +1,549 @@
+/* ==========================================================================
+   CAMADAS DE MEMÓRIA — INTERFACE
+   Linguagem visual dos cartazes: vermelho, rosa, amarelo e laranja sobre
+   tinta preta e papel claro, com tipografia condensada em caixa alta.
+
+   ORGANIZAÇÃO
+   0. Tokens (paleta → semânticos)
+   1. Reset e base
+   2. Camadas (câmera → canvas 3D → interface)
+   3. Tela inicial
+   4. Scanner e mira A3
+   5. Simulador (?debug)
+   6. Acessibilidade
+   ========================================================================== */
+
+/* ==========================================================================
+   0. TOKENS
+   ========================================================================== */
+
+:root {
+  /* — Tipografia — */
+  --font-display:
+    "Big Shoulders Display", "Oswald", Impact, "Arial Narrow", sans-serif;
+  --font-text:
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* — Paleta da marca (valores brutos, só aqui) — */
+  --red: #d00000;
+  --pink: #da4291;
+  --pink-vibrant: #e7237f;
+  --yellow-gold: #ffd100;
+  --yellow-alert: #f3c623;
+  --orange: #ed6b1d;
+  --glass-blue: #89cde5;
+  --shadows: #090a0a;
+  --ink: #121212;
+  --cream: #fbfbfb;
+  --white: #ffffff;
+
+  /* Canais RGB de --shadows, para sombras e vinhetas com transparência. */
+  --shadows-rgb: 9 10 10;
+
+  /* — Tokens semânticos (use estes nos componentes) — */
+  --accent: var(--yellow-gold); /* botões, scanline, destaques principais */
+  --accent-alt: var(--pink-vibrant); /* marcadores secundários */
+  --signal-idle: var(--yellow-alert); /* procurando cartaz */
+  --signal-found: var(--glass-blue); /* cartaz reconhecido / ao vivo */
+  --signal-warn: var(--orange); /* avisos e erros */
+
+  --surface-dark: var(--ink); /* etiquetas sobre a câmera */
+  --on-dark: var(--cream);
+  --on-accent: var(--ink);
+  --text-muted: rgb(255 255 255 / 0.86);
+
+  /* — Layout — */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ==========================================================================
+   1. RESET E BASE
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* O fundo precisa ser transparente para não cobrir a câmera. */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+  font-family: var(--font-text);
+  color: var(--white);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 3px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.svg-defs {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   2. CAMADAS (câmera → canvas 3D → interface)
+   ========================================================================== */
+
+/* Vinheta leve: valoriza as bordas sem escurecer o cartaz no centro. */
+#camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgb(var(--shadows-rgb) / 0.4) 100%
+  );
+}
+
+body > video,
+#fallback-camera-video {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  pointer-events: none;
+}
+
+a-scene,
+.a-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2 !important;
+  background: transparent !important;
+}
+
+/* ==========================================================================
+   3. TELA INICIAL — composição de cartaz
+   ========================================================================== */
+
+#start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+  overflow: hidden;
+  /* Vermelho puro no foco, escurecendo para as bordas como no cartaz 01. */
+  background:
+    radial-gradient(
+      120% 90% at 18% 78%,
+      transparent 0%,
+      rgb(var(--shadows-rgb) / 0.28) 58%,
+      rgb(var(--shadows-rgb) / 0.62) 100%
+    ),
+    var(--red);
+  transition:
+    opacity 0.45s ease,
+    visibility 0.45s ease;
+}
+
+#start-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Bloco amarelo sangrando no canto, como o duotone do cartaz 01. */
+.poster-block {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 46%;
+  height: 52%;
+  background:
+    radial-gradient(
+      circle at 30% 20%,
+      rgb(var(--shadows-rgb) / 0.14) 0 6%,
+      transparent 7%
+    ),
+    radial-gradient(
+      circle at 70% 60%,
+      rgb(var(--shadows-rgb) / 0.12) 0 4%,
+      transparent 5%
+    ),
+    radial-gradient(
+      circle at 45% 80%,
+      rgb(var(--shadows-rgb) / 0.1) 0 7%,
+      transparent 8%
+    ),
+    var(--yellow-alert);
+  filter: url(#spray);
+  z-index: 0;
+}
+
+.top-badge,
+.hero,
+.start-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.top-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-found);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hero {
+  width: 100%;
+  max-width: 700px;
+}
+
+/* Título em caixa alta condensada com borda granulada (spray). */
+.hero-title {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 18px;
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 22vw, 8rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  color: var(--white);
+  text-shadow: 0 0 0.05em rgb(255 255 255 / 0.55);
+}
+
+.hero-title.spray {
+  filter: url(#spray);
+}
+
+/* "DE" recuado e menor, ritmo de cartaz tipográfico. */
+.hero-title span:nth-child(2) {
+  font-size: 0.5em;
+  line-height: 1;
+  padding-left: 0.12em;
+}
+
+.hero-title span:nth-child(3) {
+  align-self: flex-end;
+}
+
+.hero-desc {
+  max-width: 34ch;
+  margin-bottom: 26px;
+  margin-left: 8px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 18px 20px;
+  border: 3px solid var(--shadows);
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 6px 6px 0 var(--shadows);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.2s ease;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 var(--shadows);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.btn-arrow {
+  font-family: var(--font-text);
+  font-weight: 700;
+}
+
+.start-message {
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border-left: 5px solid var(--signal-warn);
+}
+
+/* Crédito pequeno, como o rodapé dos cartazes. */
+.start-footer {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgb(255 255 255 / 0.78);
+}
+
+/* ==========================================================================
+   4. SCANNER E MIRA A3 (1 : 1,414)
+   ========================================================================== */
+
+#scanner-ui {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+#scanner-ui.visible {
+  opacity: 1;
+}
+
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 9px 14px;
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  border-left: 5px solid var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Amarelo = procurando · azul = cartaz reconhecido. */
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-idle);
+  box-shadow: 0 0 8px var(--signal-idle);
+  opacity: 0.7;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease,
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.status-dot.active {
+  background: var(--signal-found);
+  box-shadow: 0 0 10px var(--signal-found);
+  opacity: 1;
+  transform: scale(1.4);
+}
+
+.reticle-a3 {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: min(62vw, 250px);
+  aspect-ratio: 1 / 1.414;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.reticle-a3.locked {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 0 solid var(--white);
+  filter: drop-shadow(0 1px 3px rgb(var(--shadows-rgb) / 0.6));
+}
+.corner.tl {
+  top: 0;
+  left: 0;
+  border-width: 4px 0 0 4px;
+}
+.corner.tr {
+  top: 0;
+  right: 0;
+  border-width: 4px 4px 0 0;
+}
+.corner.bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 4px 4px;
+}
+.corner.br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 4px 4px 0;
+}
+
+.scanline {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: scan-loop 2.8s ease-in-out infinite;
+}
+
+@keyframes scan-loop {
+  0%,
+  100% {
+    top: 8%;
+    opacity: 0.3;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+}
+
+.reticle-caption {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   5. SIMULADOR DOS CARTAZES (?debug)
+   ========================================================================== */
+
+#debug-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  background: var(--surface-dark);
+  border-left: 5px solid var(--accent-alt);
+}
+
+.debug-label {
+  margin-right: 3px;
+  color: var(--on-dark);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.btn-sim {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--on-dark);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--on-dark);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.btn-sim:hover,
+.btn-sim:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ==========================================================================
+   6. ACESSIBILIDADE
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-live,
+  .scanline {
+    animation: none;
+  }
+  .btn-primary,
+  .reticle-a3,
+  #start-screen,
+  #scanner-ui {
+    transition: none;
+  }
+}

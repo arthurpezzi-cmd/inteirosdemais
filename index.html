@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#a80000" />
+    <meta
+      name="description"
+      content="Exposição interativa em realidade aumentada: aponte a câmera para os cartazes A3 e conheça as trajetórias."
+    />
+    <title>Camadas de Memória — Exposição Interativa WebAR</title>
+
+    <!-- Tipografia: Big Shoulders Display (títulos condensados) + Inter (texto) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./style.css" />
+
+    <!-- A-Frame & MindAR -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  </head>
+  <body>
+    <!-- Filtro SVG: bordas granuladas, como tinta spray nos cartazes -->
+    <svg
+      class="svg-defs"
+      width="0"
+      height="0"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <filter id="spray" x="-6%" y="-6%" width="112%" height="112%">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.85"
+          numOctaves="2"
+          seed="7"
+          result="noise"
+        />
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="noise"
+          scale="7"
+          xChannelSelector="R"
+          yChannelSelector="G"
+          result="rough"
+        />
+        <feGaussianBlur in="rough" stdDeviation="0.7" />
+      </filter>
+    </svg>
+
+    <div id="camera-overlay"></div>
+
+    <!-- 1. TELA DE ABERTURA -->
+    <section id="start-screen" aria-labelledby="start-title">
+      <div class="poster-block" aria-hidden="true"></div>
+
+      <header class="top-badge">
+        <span class="dot-live"></span>
+        <span>Exposição interativa com realidade aumentada</span>
+      </header>
+
+      <div class="hero">
+        <h1 id="start-title" class="hero-title spray">Camadas de memórias</h1>
+
+        <p class="hero-desc">
+          Aponte a câmera para os cartazes A3 da exposição para destacar os
+          personagens em três dimensões e revelar suas trajetórias.
+        </p>
+
+        <button id="btn-start" class="btn-primary" type="button">
+          <span>Iniciar experiência</span>
+          <span class="btn-arrow" aria-hidden="true">→</span>
+        </button>
+        <p id="start-message" class="start-message" role="alert" hidden></p>
+      </div>
+
+      <footer class="start-footer">
+        Compatível com iOS Safari e Android Chrome · Sem instalação
+      </footer>
+    </section>
+
+    <!-- 2. INTERFACE DE ESCANEAMENTO -->
+    <div id="scanner-ui">
+      <div class="top-bar">
+        <div class="status-pill" role="status" aria-live="polite">
+          <span id="status-dot" class="status-dot"></span>
+          <span id="status-text">Enquadre um cartaz A3…</span>
+        </div>
+
+        <!-- Simulador: aparece com ?debug na URL ou sem acesso ao MindAR -->
+        <div id="debug-bar" hidden>
+          <span class="debug-label">Testar</span>
+        </div>
+      </div>
+
+      <!-- Guia visual na proporção de um A3 vertical (1 : 1,414) -->
+      <div id="reticle" class="reticle-a3" aria-hidden="true">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div class="scanline"></div>
+        <div class="reticle-caption">Enquadre o cartaz inteiro</div>
+      </div>
+    </div>
+
+    <!-- 3. CENA A-FRAME + MINDAR (filtro One-Euro para estabilizar o tracking).
+         Os alvos são gerados por app.js a partir de dados.js. -->
+    <a-scene
+      id="ar-scene"
+      mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: 0.0001; filterBeta: 0.005; warmupTolerance: 4; missTolerance: 10; maxTrack: 1;"
+      color-space="sRGB"
+      renderer="colorManagement: true; antialias: true; alpha: true"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+    >
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    </a-scene>
+
+    <script src="./dados.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
